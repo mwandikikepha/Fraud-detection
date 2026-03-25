@@ -1,0 +1,115 @@
+
+# Fraud Detection ML Pipeline - Argo Workflow
+
+# This file tells Argo how to run our fraud detection
+# pipeline automatically, step by step.
+#
+# Each step runs inside our Docker container (fraud-detection:latest)
+# Steps run in order - the next step only starts when the previous one finishes
+#
+# Run with: argo submit argo/workflow.yaml
+
+
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  # Each run gets a unique name like fraud-detection-pipeline-abc123
+  generateName: fraud-detection-pipeline-
+
+spec:
+  # Start with the main pipeline
+  entrypoint: fraud-detection-pipeline
+
+  # These are settings we can change without editing the pipeline
+  arguments:
+    parameters:
+      - name: data-path
+        value: "/app/data/transactions.csv"
+
+  templates:
+
+  
+    # MAIN PIPELINE
+    # Defines the order steps run in
+  
+    - name: fraud-detection-pipeline
+      dag:
+        tasks:
+          # Step 1 - runs first, no dependencies
+          - name: data-validation
+            template: validate-data
+
+          # Step 2 - runs after step 1 finishes
+          - name: feature-engineering
+            template: engineer-features
+            dependencies: [data-validation]
+
+          # Step 3 - runs after step 2 finishes
+          - name: model-training
+            template: train-model
+            dependencies: [feature-engineering]
+
+          # Step 4 - runs after step 3 finishes
+          - name: model-evaluation
+            template: evaluate-model
+            dependencies: [model-training]
+
+          # Step 5 - runs last, after evaluation passes
+          - name: model-export
+            template: export-model
+            dependencies: [model-evaluation]
+
+    
+    # STEP 1: Validate Data
+    # Checks the data is clean before we do anything
+    # Runs: src/validate_data.py
+    
+    - name: validate-data
+      container:
+        image: fraud-detection:latest
+        command: [python, src/validate_data.py]
+
+  
+    # STEP 2: Engineer Features
+    # Creates the 23 features our model needs
+    # Runs: src/feature_engineering.py
+    
+    - name: engineer-features
+      container:
+        image: fraud-detection:latest
+        command: [python, src/feature_engineering.py]
+
+    
+    # STEP 3: Train Model
+    # Trains XGBoost and saves the model
+    # Runs: src/train_model.py
+    # Gets more memory/CPU because training is heavy
+    
+    - name: train-model
+      container:
+        image: fraud-detection:latest
+        command: [python, src/train_model.py]
+        resources:
+          limits:
+            memory: "4Gi"   # 4GB RAM for training
+            cpu: "2"        # 2 CPU cores
+
+  
+    # STEP 4: Evaluate Model
+    # Checks model performance (accuracy, F1, AUC)
+    # Runs: src/evaluate_model.py
+    
+    - name: evaluate-model
+      container:
+        image: fraud-detection:latest
+        command: [python, src/evaluate_model.py]
+
+    
+    # STEP 5: Generate Predictions
+    # Runs model on test data, saves test_predictions.csv
+    # Runs: src/predict.py
+  
+    - name: export-model
+      container:
+        image: fraud-detection:latest
+        command: [python, src/predict.py]
