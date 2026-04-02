@@ -1,6 +1,4 @@
 # Mobile Money Fraud Detection
-**Candidate:** Mercy Mawia Musyoka
-**Date:** 24/03/2026
 **Challenge:** AI Engineering Challenge — End-to-End ML Fraud Detection Pipeline
 
 ---
